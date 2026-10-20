@@ -1,0 +1,1 @@
+package dev.frostey.arcanelibrary.block; public class BlockPotionLibrary extends net.minecraft.block.Block {}

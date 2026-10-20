@@ -1,11 +1,11 @@
 param([string]$OutputJar = "")
 $ErrorActionPreference = 'Stop'
 $Root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
-if (-not $OutputJar) { $OutputJar = Join-Path $Root 'build/ATM0-Arcane-Library-0.2.0-exp1.jar' }
+if (-not $OutputJar) { $OutputJar = Join-Path $Root 'build/ATM0-Arcane-Library-0.2.1.jar' }
 $OutDir = Split-Path $OutputJar -Parent
 New-Item -Force -ItemType Directory (Join-Path $Root 'build/patcher'), (Join-Path $Root 'build/hooks'), $OutDir | Out-Null
 $Exports = @('--add-exports','java.base/jdk.internal.org.objectweb.asm=ALL-UNNAMED','--add-exports','java.base/jdk.internal.org.objectweb.asm.tree=ALL-UNNAMED','--add-exports','java.base/jdk.internal.org.objectweb.asm.tree.analysis=ALL-UNNAMED')
-& javac --release 8 -d (Join-Path $Root 'build/hooks') (Join-Path $Root 'src/main/java/dev/frostey/arcanelibrary/v2/V2Hooks.java')
+& javac --release 8 -d (Join-Path $Root 'build/hooks') (Join-Path $Root 'src/main/java/dev/frostey/arcanelibrary/v2/V2Hooks.java') (Join-Path $Root 'src/main/java/dev/frostey/arcanelibrary/v2/V21BlockHooks.java')
 if ($LASTEXITCODE -ne 0) { throw 'Hook compile failed' }
 & javac @Exports -d (Join-Path $Root 'build/patcher') (Join-Path $Root 'tools/PatchJar.java') (Join-Path $Root 'tools/VerifyJar.java')
 if ($LASTEXITCODE -ne 0) { throw 'Patcher compile failed' }

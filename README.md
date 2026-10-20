@@ -1,52 +1,70 @@
 # ATM0 Arcane Library
 
-Minecraft **1.7.10 / Forge** 專案，開發基準為 `ATM0-Arcane-Library-0.1.2-exp3-listui.jar`。
+Minecraft **1.7.10 / Forge**，目前開發版本 **0.2.1**。使用者專案 ATM0-NH。
 
-目前 GitHub 提供 **0.2.0-exp1 實驗版**，包含已編譯 JAR、可檢視的修補程式原始碼、測試與重建腳本，以及建置所需的 0.1.2 基底 JAR。
+**版本下載**
 
-> **重要：這是一份「原版 JAR + ASM 修改 + Java 新功能」的修補式程式碼，不是能直接以 ForgeGradle 編譯的完整原始碼專案。** 完整的舊版 GUI、Container、TileEntity 仍來自 `vendor/` 內的基底 JAR，而新增與修改邏輯可見於 `src/main/java/`、`tools/PatchJar.java`。不應將這份程式碼描述為已完成原生重寫。
+- [ATM0-Arcane-Library-0.2.1.jar](dist/ATM0-Arcane-Library-0.2.1.jar)
+- [ATM0-Arcane-Library-0.2.1-source.zip](dist/ATM0-Arcane-Library-0.2.1-source.zip)
+- [v0.2.1 更新說明](docs/CHANGELOG_0.2.1.md)
 
-## 下載
+> 本版本仍是測試候選版（非已實機驗證的正式穩定版）。請先備份 Minecraft 世界，移除舊版 Arcane Library JAR，勿在 `mods` 中同時安裝兩版。
 
-- [ATM0-Arcane-Library-0.2.0-exp1.jar](dist/ATM0-Arcane-Library-0.2.0-exp1.jar) — 可放入 mods 的候選版。
-- [0.2.0-exp1-source.zip](dist/ATM0-Arcane-Library-0.2.0-exp1-source.zip) — 含建置腳本、源碼、材質、測試、基底 JAR 的打包檔。
+## 0.2.1：打掉保留 NBT，再次放置恢復
 
-請務必先備份世界，將舊版 JAR 移出 `mods`，不要同時放兩版。
+附魔與藥水圖書館都能在**正常生存模式挖掘**時，掉落**恰好一個**帶 NBT 的原方塊物品。重新放置會還原原先儲存的內容：
 
-## 本版功能
+- 附魔書庫：所有附魔 ID、累積點數、最高學習等級。
+- 藥水庫：基礎效果 Essence、Glowstone / Redstone / Gunpowder Charge，以及暫存的舊版本藥水記錄。
+- NBT 使用 `ATM0LibraryData` 包裝（含 Format、Kind、Storage），放置時驗證方塊類型與資料格式。
+- 1.7.10 Forge 的 `removedByPlayer` 延後清除 TileEntity，`getDrops` 把儲存內容寫入掉落物，`harvestBlock` 結束後才真正移除；故絲綢之觸採相同 `getDrops` 分支。
+- 創造模式破壞不產出額外帶資料物品；放置時不複製座標、方塊 ID 或其他原 TileEntity 身份資料。
+- 不新增方塊、TileEntity 或物品的註冊 ID；與先前 `0.1.2`/`0.2.0` 的儲存格式相容。
 
-- 附魔書 Shift 快速存入；可在提取時組合多個附魔到同一本書；不收 XP，無 Tier。
-- 藥水單效果均質化；Glowstone / Redstone / Gunpowder Charge；拒收多效果藥水；輸入消耗瓶子，輸出自動生成藥水。
-- 獨立 GUI 材質，不再載入原版合成台背景。
-- 以既有 0.1.2 的物件 ID 與 NBT 資料為基礎做修補。
+## 延續的 0.2.0 功能
 
-**尚未驗證：** 完整 Forge 1.7.10 啟動、ATM0-NH 實機多人／伺服器、Mouse Tweaks 快速拖曳、高延遲同步、所有模組藥水 NBT。GUI 仍有暫時的五個翻頁按鈕，不是完成版搜尋／捲軸介面。請勿將此版本視為正式穩定版。
+- 附魔書 Shift 快速存入、組合多個附魔到單本書，不消耗經驗，不分書櫃 Tier。
+- 藥水效果均質化、三種 Charge、拒收多效果藥水，輸入消耗瓶子、輸出不須另備瓶子。
+- 自訂 UI 素材；目前 GUI 清單與捲動仍為測試階段。
 
-## 目錄
+## 專案架構
 
 ```text
-src/main/java/dev/frostey/arcanelibrary/v2/V2Hooks.java  新增功能（Java 8 相容）
-src/main/resources/assets/                            拆分的原創 GUI PNG
-tools/PatchJar.java                                    ASM 位元碼修補器
-tools/VerifyJar.java                                   ASM 驗證工具
-tools/draw_assets.py                                  材質生成腳本
-tests/mock_test.py                                     測試虛擬 API 建立器
-tests/stubs/                                          離線測試的 Java stub
-vendor/ATM0-Arcane-Library-0.1.2-exp3-listui.jar       建置基底
-scripts/build.sh                                      Linux/macOS 建置腳本
-scripts/build.ps1                                     Windows PowerShell 建置腳本
-dist/ATM0-Arcane-Library-0.2.0-exp1.jar               已編譯候選版
+src/main/java/dev/frostey/arcanelibrary/v2/
+  V2Hooks.java                      0.2.0 功能與存檔資料邏輯
+  V21BlockHooks.java                0.2.1 掉落／放置的 NBT 轉移邏輯
+src/main/resources/assets/          GUI 材質
+vendor/                             0.1.2 基底 JAR（重建必需）
+tools/PatchJar.java                 ASM 位元碼注入原本 1.7.10 類別
+tools/VerifyJar.java                位元碼結構檢查
+scripts/build.sh, scripts/build.ps1  建置候選 JAR
+tests/run_mock_tests.sh             模擬 API 執行測試
+tests/stubs/                        離線 Forge/Minecraft Mock 類別
 ```
 
-## 重新編譯（JDK 21）
+**原始碼範圍：** 這是「原版 JAR + ASM 修改 + Java 新功能」的 **patch-based source**，不是完整還原的 ForgeGradle 專案。原始 GUI、Container、TileEntity 仍由 `vendor/` 內的舊版基底 JAR 提供；新增功能與位元碼修改可在 `src/main/java/`、`tools/` 中檢視。長期建議另行還原為完整 Forge 專案。
 
-Linux/macOS：`bash scripts/build.sh`  
-Windows PowerShell：`powershell -ExecutionPolicy Bypass -File scripts/build.ps1`
+## 編譯與測試
 
-重建工具需 JDK 21（ASM 使用 `jdk.internal.org.objectweb.asm` 的匯出旗標）；遊戲執行端需要與 Minecraft 1.7.10 相容的 Java 環境。`V2Hooks.java` 以 Java 8 bytecode 目標編譯。
+需 JDK 21 執行 patcher（使用 `jdk.internal.org.objectweb.asm`），新加的 Hooks 會以 **Java 8 bytecode** 編譯，以配合 Minecraft 1.7.10 執行環境。
 
-這些腳本只依賴本 repo 所包含的基底 JAR 與 JDK，不需要 ForgeGradle。這種方式適合維護實驗版；長期仍應將完整舊程式反編譯還原成正常 ForgeGradle 原始碼工程。
+Linux/macOS：
 
-## 授權與來源
+```bash
+bash scripts/build.sh
+bash tests/run_mock_tests.sh
+```
 
-本版自製 GUI 素材位於 `src/main/resources/assets/`。未嵌入 Sotnah / Apothic Enchanting 原始 GUI PNG。若未來替換成第三方材質，請先確認其再散布權利並保留必要署名。舊版基底 JAR 與你自己的程式碼授權應另行核對，不以第三方 MIT 授權覆蓋它們。
+Windows：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/build.ps1
+```
+
+編譯後位置 `build/ATM0-Arcane-Library-0.2.1.jar`。
+
+**測試範圍：** JAR 位元碼結構檢驗和模擬 Minecraft API 的 NBT／掉落流程已通過。**尚未驗證**完整 Forge 1.7.10 啟動、多人連線、Modpack 中其他模組的自訂破壞流程和 Mouse Tweaks 真實手感；完成前請勿將資料唯一副本放入機器。
+
+## 授權
+
+自製素材在 `src/main/resources/assets/`；未包含 Sotnah 或 Apothic Enchanting 原始 PNG。若使用第三方素材，請先確認其再散布權利。

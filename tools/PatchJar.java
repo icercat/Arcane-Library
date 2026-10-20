@@ -101,16 +101,42 @@ public class PatchJar implements Opcodes {
    tick.instructions.add(s(new VarInsnNode(ALOAD,0),new MethodInsnNode(INVOKESPECIAL,"net/minecraft/client/gui/inventory/GuiContainer","func_73876_c","()V",false),new VarInsnNode(ALOAD,0),hook("refreshGui","(Ljava/lang/Object;)V"),new InsnNode(RETURN)));
    c.methods.add(tick);
  }
+
+ /** 1.7.10 Forge drop/placement overrides for *both* library blocks. */
+ static void block(ClassNode c){
+   final String hooks="dev/frostey/arcanelibrary/v2/V21BlockHooks";
+   final String world="Lnet/minecraft/world/World;";
+   final String player="Lnet/minecraft/entity/player/EntityPlayer;";
+   final String living="Lnet/minecraft/entity/EntityLivingBase;";
+   // Forge-specific method is intentionally unmapped in SRG runtime.
+   MethodNode remove=new MethodNode(ACC_PUBLIC,"removedByPlayer","("+world+player+"IIIZ)Z",null,null);
+   remove.instructions.add(s(new VarInsnNode(ALOAD,0),new VarInsnNode(ALOAD,1),new VarInsnNode(ALOAD,2),new VarInsnNode(ILOAD,3),new VarInsnNode(ILOAD,4),new VarInsnNode(ILOAD,5),new VarInsnNode(ILOAD,6),new MethodInsnNode(INVOKESTATIC,hooks,"removedByPlayer","(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;IIIZ)Z",false),new InsnNode(IRETURN)));
+   c.methods.add(remove);
+   MethodNode drops=new MethodNode(ACC_PUBLIC,"getDrops","("+world+"IIIII)Ljava/util/ArrayList;",null,null);
+   drops.instructions.add(s(new VarInsnNode(ALOAD,0),new VarInsnNode(ALOAD,1),new VarInsnNode(ILOAD,2),new VarInsnNode(ILOAD,3),new VarInsnNode(ILOAD,4),new VarInsnNode(ILOAD,5),new VarInsnNode(ILOAD,6),new MethodInsnNode(INVOKESTATIC,hooks,"getDrops","(Ljava/lang/Object;Ljava/lang/Object;IIIII)Ljava/util/ArrayList;",false),new InsnNode(ARETURN)));
+   c.methods.add(drops);
+   MethodNode harvest=new MethodNode(ACC_PUBLIC,"func_149636_a","("+world+player+"IIII)V",null,null);
+   harvest.instructions.add(s(new VarInsnNode(ALOAD,0),new VarInsnNode(ALOAD,1),new VarInsnNode(ALOAD,2),new VarInsnNode(ILOAD,3),new VarInsnNode(ILOAD,4),new VarInsnNode(ILOAD,5),new VarInsnNode(ILOAD,6),new MethodInsnNode(INVOKESPECIAL,"net/minecraft/block/BlockContainer","func_149636_a","("+world+player+"IIII)V",false),new VarInsnNode(ALOAD,1),new VarInsnNode(ILOAD,3),new VarInsnNode(ILOAD,4),new VarInsnNode(ILOAD,5),new MethodInsnNode(INVOKESTATIC,hooks,"finishHarvest","(Ljava/lang/Object;III)V",false),new InsnNode(RETURN)));
+   c.methods.add(harvest);
+   MethodNode placed=new MethodNode(ACC_PUBLIC,"func_149689_a","("+world+"III"+living+STACK+")V",null,null);
+   placed.instructions.add(s(new VarInsnNode(ALOAD,0),new VarInsnNode(ALOAD,1),new VarInsnNode(ILOAD,2),new VarInsnNode(ILOAD,3),new VarInsnNode(ILOAD,4),new VarInsnNode(ALOAD,6),new MethodInsnNode(INVOKESTATIC,hooks,"onPlaced","(Ljava/lang/Object;Ljava/lang/Object;IIILjava/lang/Object;)V",false),new InsnNode(RETURN)));
+   c.methods.add(placed);
+   // Silk Touch must go through the same NBT-aware getDrops code path.
+   MethodNode silk=new MethodNode(ACC_PUBLIC,"canSilkHarvest","("+world+player+"IIII)Z",null,null);
+   silk.instructions.add(s(new InsnNode(ICONST_0),new InsnNode(IRETURN)));
+   c.methods.add(silk);
+ }
  static byte[] transform(byte[] input,String name){ClassReader cr=new ClassReader(input);ClassNode c=new ClassNode();cr.accept(c,0);
-   if(name.endsWith("tile/TilePotionLibrary.class"))tilePotion(c);
+   if(name.endsWith("block/BlockPotionLibrary.class")||name.endsWith("block/BlockEnchantmentLibrary.class"))block(c);
+   else if(name.endsWith("tile/TilePotionLibrary.class"))tilePotion(c);
    else if(name.endsWith("tile/TileLibraryBase.class"))tileBase(c);
    else if(name.endsWith("container/ContainerPotionLibrary.class"))containers(c,true);
    else if(name.endsWith("container/ContainerEnchantmentLibrary.class"))containers(c,false);
    else if(name.endsWith("client/GuiEnchantmentLibrary.class"))gui(c,false);
    else if(name.endsWith("client/GuiPotionLibrary.class"))gui(c,true);
    else if(name.endsWith("ATM0ArcaneLibrary.class")){
-       for(FieldNode f:c.fields)if(f.name.equals("VERSION"))f.value="0.2.0-exp1";
-       if(c.visibleAnnotations!=null)for(AnnotationNode a:c.visibleAnnotations)if(a.values!=null)for(int i=0;i+1<a.values.size();i+=2)if("version".equals(a.values.get(i)))a.values.set(i+1,"0.2.0-exp1");
+       for(FieldNode f:c.fields)if(f.name.equals("VERSION"))f.value="0.2.1";
+       if(c.visibleAnnotations!=null)for(AnnotationNode a:c.visibleAnnotations)if(a.values!=null)for(int i=0;i+1<a.values.size();i+=2)if("version".equals(a.values.get(i)))a.values.set(i+1,"0.2.1");
    }
    ClassWriter cw=new ClassWriter(ClassWriter.COMPUTE_MAXS);c.accept(cw);return cw.toByteArray();
  }
@@ -120,13 +146,13 @@ public class PatchJar implements Opcodes {
    while(it.hasMoreElements()){
     ZipEntry e=it.nextElement();String name=e.getName();
     byte[] bytes;try(InputStream is=zip.getInputStream(e)){bytes=is.readAllBytes();}
-    if(name.endsWith(".class")&&(name.endsWith("TilePotionLibrary.class")||name.endsWith("TileLibraryBase.class")||name.endsWith("ContainerPotionLibrary.class")||name.endsWith("ContainerEnchantmentLibrary.class")||name.endsWith("GuiPotionLibrary.class")||name.endsWith("GuiEnchantmentLibrary.class")||name.endsWith("ATM0ArcaneLibrary.class"))){
+    if(name.endsWith(".class")&&(name.endsWith("TilePotionLibrary.class")||name.endsWith("TileLibraryBase.class")||name.endsWith("BlockPotionLibrary.class")||name.endsWith("BlockEnchantmentLibrary.class")||name.endsWith("ContainerPotionLibrary.class")||name.endsWith("ContainerEnchantmentLibrary.class")||name.endsWith("GuiPotionLibrary.class")||name.endsWith("GuiEnchantmentLibrary.class")||name.endsWith("ATM0ArcaneLibrary.class"))){
       bytes=transform(bytes,name);System.out.println("patched "+name);touched++;
     }
-    if(name.equals("mcmod.info")){String x=new String(bytes,"UTF-8");x=x.replace("0.1.2-exp3-listui","0.2.0-exp1");bytes=x.getBytes("UTF-8");}
+    if(name.equals("mcmod.info")){String x=new String(bytes,"UTF-8");x=x.replace("0.1.2-exp3-listui","0.2.1");bytes=x.getBytes("UTF-8");}
     out.putNextEntry(new ZipEntry(name));out.write(bytes);out.closeEntry();
    }
-   if(touched!=7)throw new IOException("Patched "+touched+" of 7 classes");
+   if(touched!=9)throw new IOException("Patched "+touched+" of 9 classes");
    Path cls=Paths.get(args[2]);Files.walk(cls).filter(Files::isRegularFile).forEach(p->{try{
       String k=cls.relativize(p).toString().replace(File.separatorChar,'/');if(!k.startsWith("dev/"))return;out.putNextEntry(new ZipEntry(k));out.write(Files.readAllBytes(p));out.closeEntry();
    }catch(IOException e){throw new UncheckedIOException(e);}});
