@@ -1,7 +1,7 @@
 param([string]$OutputJar = "")
 $ErrorActionPreference = 'Stop'
 $Root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
-if (-not $OutputJar) { $OutputJar = Join-Path $Root 'build/ATM0-Arcane-Library-0.2.2.jar' }
+if (-not $OutputJar) { $OutputJar = Join-Path $Root 'build/ATM0-Arcane-Library-0.2.3.jar' }
 $OutDir = Split-Path $OutputJar -Parent
 New-Item -Force -ItemType Directory (Join-Path $Root 'build/patcher'), (Join-Path $Root 'build/hooks'), $OutDir | Out-Null
 $Exports = @('--add-exports','java.base/jdk.internal.org.objectweb.asm=ALL-UNNAMED','--add-exports','java.base/jdk.internal.org.objectweb.asm.tree=ALL-UNNAMED','--add-exports','java.base/jdk.internal.org.objectweb.asm.tree.analysis=ALL-UNNAMED')

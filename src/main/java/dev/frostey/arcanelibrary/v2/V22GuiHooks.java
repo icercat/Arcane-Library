@@ -3,10 +3,11 @@ package dev.frostey.arcanelibrary.v2;
 import java.lang.reflect.*;
 import java.util.*;
 
-/** Pixel-exact Sotnah library.png background and scroll-list bridge (1.7.10). */
+/** Widened Sotnah GUI, uncropped long names, hover statistics (Minecraft 1.7.10). */
 public final class V22GuiHooks {
     private V22GuiHooks(){}
-    private static final int BG_W=307,BG_H=256;
+    private static final int BG_W=512,BG_H=256;
+    private static final int WIDTH=252, EXTRA=76, LIST_WIDTH=189, INVENTORY_X=38;
     private static final Map<Object,String> FILTER=Collections.synchronizedMap(new WeakHashMap<Object,String>());
     private static final Map<Object,Boolean> FOCUS=Collections.synchronizedMap(new WeakHashMap<Object,Boolean>());
     private static Class<?> cl(String n){try{return Class.forName(n);}catch(Exception e){throw new IllegalStateException(n,e);}}
@@ -37,10 +38,10 @@ public final class V22GuiHooks {
         buttons.clear();
         if(potion){
             int x=left(gui),y=top(gui);
-            buttons.add(button(10,x+2,y+132,42,14,"Normal"));
-            buttons.add(button(11,x+45,y+132,40,14,"Strong"));
-            buttons.add(button(12,x+86,y+132,40,14,"Long"));
-            buttons.add(button(13,x+127,y+132,47,14,"Splash"));
+            buttons.add(button(10,x+12,y+132,54,14,"Normal"));
+            buttons.add(button(11,x+70,y+132,54,14,"Strong"));
+            buttons.add(button(12,x+128,y+132,54,14,"Long"));
+            buttons.add(button(13,x+186,y+132,54,14,"Splash"));
         }
     }
     private static void bindTexture(){
@@ -48,7 +49,7 @@ public final class V22GuiHooks {
             Object mc=cl("net.minecraft.client.Minecraft").getMethod("func_71410_x").invoke(null);
             Object mgr=call(mc,"func_110434_K",new Class<?>[0]);
             Class<?> res=cl("net.minecraft.util.ResourceLocation");
-            Object tex=res.getConstructor(String.class,String.class).newInstance("atm0arcanelibrary","textures/gui/sotnah_library.png");
+            Object tex=res.getConstructor(String.class,String.class).newInstance("atm0arcanelibrary","textures/gui/library_wide.png");
             call(mgr,"func_110577_a",new Class<?>[]{res},tex);
         }catch(Exception e){throw new IllegalStateException("Sotnah UI texture",e);}
     }
@@ -88,38 +89,85 @@ public final class V22GuiHooks {
             call(font,"func_78276_b",new Class<?>[]{String.class,int.class,int.class,int.class},label,x,y,color);
         }catch(Exception ignored){}
     }
+    private static void drawStringFit(Object gui,String label,int x,int y,int maxWidth,int color){
+        if(label==null)return;
+        Object font=V2Hooks.field(gui,"field_146289_q");
+        int natural=((Number)call(font,"func_78256_a",new Class<?>[]{String.class},label)).intValue();
+        if(natural<=maxWidth||natural==0){drawString(gui,label,x,y,color);return;}
+        // Use OpenGL scale rather than truncating multilingual or modded names.
+        try{
+            Class<?> gl=cl("org.lwjgl.opengl.GL11");
+            gl.getMethod("glPushMatrix").invoke(null);
+            double scale=maxWidth/(double)natural;
+            gl.getMethod("glTranslated",double.class,double.class,double.class).invoke(null,(double)x,(double)y,0.0);
+            gl.getMethod("glScaled",double.class,double.class,double.class).invoke(null,scale,Math.max(0.66,scale),1.0);
+            drawString(gui,label,0,0,color);
+            gl.getMethod("glPopMatrix").invoke(null);
+        }catch(Exception ex){drawString(gui,label,x,y,color);}
+    }
+    /** Hover details: full title, highest learned level and stored points/essence. */
+    public static void tooltip(Object gui,int mouseX,int mouseY){
+        int x=left(gui),y=top(gui);
+        if(mouseX<x+20||mouseX>=x+20+LIST_WIDTH||mouseY<y+30||mouseY>=y+130)return;
+        int row=(mouseY-y-30)/20;
+        int[] filtered=matches(gui);
+        int index=number(gui,"pageStart")+row;
+        if(index<0||index>=filtered.length)return;
+        int id=filtered[index];
+        Object tile=tile(gui);
+        List<String> lines=new ArrayList<String>();
+        String title=entry(gui,id);
+        lines.add("\u00a7e"+title);
+        if(potion(gui)){
+            long count=V2Hooks.potionStock(tile,id);
+            lines.add("\u00a77Stored Essence: "+"\u00a7f"+count);
+            lines.add("\u00a77Base level: "+"\u00a7fI");
+            lines.add("\u00a77Strong level: "+"\u00a7fII (Glowstone Charge)");
+            lines.add("\u00a77"+V2Hooks.charges(tile));
+        }else{
+            try {
+                int enchId=((Number)call(tile,"enchantmentIdAt",new Class<?>[]{int.class},id)).intValue();
+                int max=((Number)call(tile,"maxLevel",new Class<?>[]{int.class},enchId)).intValue();
+                long points=((Number)call(tile,"points",new Class<?>[]{int.class},enchId)).longValue();
+                lines.add("\u00a77Highest stored level: "+"\u00a7a"+max);
+                lines.add("\u00a77Stored points: "+"\u00a7b"+points);
+            }catch(Exception ex){lines.add("\u00a78Storage data unavailable");}
+        }
+        // Called after GuiContainer.drawScreen, so tooltips overlay slots instead of being hidden.
+        try{call(gui,"func_146283_a",new Class<?>[]{List.class,int.class,int.class},lines,mouseX,mouseY);}
+        catch(Exception ignored){}
+    }
     public static void render(Object gui,float partial,int mouseX,int mouseY){
         bindTexture();
         int x=left(gui),y=top(gui);
-        quad(x,y,176,230,0,0);
+        quad(x,y,WIDTH,136,0,0);
+        quad(x+INVENTORY_X,y+136,176,94,INVENTORY_X,136);
         int[] filtered=matches(gui);int first=number(gui,"pageStart");
         first=Math.max(0,Math.min(first,Math.max(0,filtered.length-5)));
         setInt(gui,"pageStart",first);
         int sel=number(gui,"localSelected");
         for(int row=0;row<5&&first+row<filtered.length;row++){
             int id=filtered[first+row],sy=y+30+20*row;
-            boolean hover=mouseX>=x+20&&mouseX<x+133&&mouseY>=sy&&mouseY<sy+20;
-            quad(x+20,sy,113,20,194,hover?20:0);
-            // Text must not be pre-rendered into a button. It is drawn as part of the list.
-            String label=entry(gui,id);
-            if(label.length()>21)label=label.substring(0,19)+"..";
-            drawString(gui,label,x+22,sy+4,id==sel?0xE7C7E8:0xFFFFFF);
+            boolean hover=mouseX>=x+20&&mouseX<x+20+LIST_WIDTH&&mouseY>=sy&&mouseY<sy+20;
+            quad(x+20,sy,LIST_WIDTH,20,280,hover?20:0);
+            // Full display name (even 100+ chars), scaled to available pixels, never replaced with ellipses.
+            drawStringFit(gui,entry(gui,id),x+22,sy+4,LIST_WIDTH-7,id==sel?0xE7C7E8:0xFFFFFF);
         }
         // Sotnah scrollbar artwork. Source atlas at (303,40/52), 4x12.
         if(filtered.length>5){
             int h=89,den=Math.max(1,filtered.length-5);
             int at=(int)Math.round(h*(first/(double)den));
-            quad(x+13,y+29+at,4,12,303,40);
-        }else quad(x+13,y+29,4,12,303,52);
+            quad(x+13,y+29+at,4,12,480,40);
+        }else quad(x+13,y+29,4,12,480,52);
         // Search string stays aligned to the original built-in filter field.
         drawString(gui,FILTER.containsKey(gui)?FILTER.get(gui):"",x+17,y+17,0xFFFFFF);
     }
     public static void foreground(Object gui,int mx,int my){
         drawString(gui,potion(gui)?"Potion Library":"Enchantment Library",7,5,0x3D302B);
-        drawString(gui,"Inventory",8,136,0x5B514A);
+        drawString(gui,"Inventory",INVENTORY_X+8,136,0x5B514A);
         if(potion(gui)){
             String[] count=V2Hooks.charges(tile(gui)).split(" ");
-            for(int i=0;i<count.length;i++)drawString(gui,count[i],139,10+i*10,i==0?0xBBA132:i==1?0xB6544B:0x555555);
+            for(int i=0;i<count.length;i++)drawString(gui,count[i],210,10+i*10,i==0?0xBBA132:i==1?0xB6544B:0x555555);
         }
     }
     private static void send(Object gui,int id){
@@ -136,13 +184,13 @@ public final class V22GuiHooks {
     }
     public static void click(Object gui,int mouseX,int mouseY,int button){
         int x=left(gui),y=top(gui);
-        if(mouseX>=x+16&&mouseX<x+126&&mouseY>=y+16&&mouseY<y+27){
+        if(mouseX>=x+16&&mouseX<x+202&&mouseY>=y+16&&mouseY<y+27){
             FOCUS.put(gui,true);
             if(button==1){FILTER.put(gui,"");setInt(gui,"pageStart",0);}
             return;
         }
         FOCUS.put(gui,false);
-        if(mouseX>=x+20&&mouseX<x+133&&mouseY>=y+30&&mouseY<y+130){
+        if(mouseX>=x+20&&mouseX<x+20+LIST_WIDTH&&mouseY>=y+30&&mouseY<y+130){
             int row=(mouseY-y-30)/20;
             int[] filtered=matches(gui);
             int i=number(gui,"pageStart")+row;

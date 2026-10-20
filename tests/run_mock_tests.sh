@@ -6,3 +6,5 @@ mapfile -t STUBS < <(find "$ROOT/tests/stubs" -name '*.java' | sort)
 javac --release 8 -d "$ROOT/build/testclasses" "$ROOT/src/main/java/dev/frostey/arcanelibrary/v2/V2Hooks.java" "$ROOT/src/main/java/dev/frostey/arcanelibrary/v2/V21BlockHooks.java" "$ROOT/src/main/java/dev/frostey/arcanelibrary/v2/V22OutputHooks.java" "$ROOT/src/main/java/dev/frostey/arcanelibrary/v2/V22GuiHooks.java" "${STUBS[@]}"
 java -cp "$ROOT/build/testclasses" TestV2
 java -cp "$ROOT/build/testclasses" TestNBTDrop
+
+java -cp "$ROOT/build/testclasses" TestHover

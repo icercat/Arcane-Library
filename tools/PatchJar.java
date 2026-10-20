@@ -90,6 +90,21 @@ public class PatchJar implements Opcodes {
        else if(i.operand==142){i.operand=206;repl++;}
    }
    if(repl!=2)throw new IllegalStateException("Expected 27 inventory + 9 hotbar position changes");
+   // Real inventory Slot X is shifted +38 so hitboxes follow the centered lower atlas.
+   int shifted=0;
+   for(AbstractInsnNode n:inv.instructions.toArray())if(n.getOpcode()==IADD&&n.getNext() instanceof IntInsnNode){
+       IntInsnNode next=(IntInsnNode)n.getNext();
+       if(next.operand==148||next.operand==206){
+           inv.instructions.insert(n,s(new IntInsnNode(BIPUSH,38),new InsnNode(IADD)));
+           shifted++;
+       }
+   }
+   if(shifted!=2)throw new IllegalStateException("Expected main and hotbar X offsets (38)");
+   // All 3 machine slots (input, output, filter) track right sidebar shift +76.
+   for(AbstractInsnNode n:ctor.instructions.toArray())if(n instanceof IntInsnNode){
+       IntInsnNode i=(IntInsnNode)n;
+       if(i.operand==143)i.operand=219;
+   }
    MethodNode transfer=method(c,"func_82846_b","("+PLAYER+"I)"+STACK);
    impl(transfer,s(new VarInsnNode(ALOAD,0),new VarInsnNode(ALOAD,1),new VarInsnNode(ILOAD,2),
        new MethodInsnNode(INVOKESTATIC,"dev/frostey/arcanelibrary/v2/V22OutputHooks","quickMove","(Ljava/lang/Object;Ljava/lang/Object;I)Ljava/lang/Object;",false),
@@ -126,11 +141,19 @@ public class PatchJar implements Opcodes {
        ((IntInsnNode)n).operand=230;updated++;
    }
    if(updated!=1)throw new IllegalStateException("Expected old GUI height once");
+   int widened=0;
+   for(AbstractInsnNode n:ctor.instructions.toArray())if(n instanceof IntInsnNode&&((IntInsnNode)n).operand==176){
+       ((IntInsnNode)n).operand=252;widened++;
+   }
+   if(widened!=1)throw new IllegalStateException("Expected GUI width 176 exactly once");
+   // Original entryLabel() hard-truncates at 14 chars; remove that before changing renderer.
+   MethodNode shorten=method(c,"shorten","(Ljava/lang/String;I)Ljava/lang/String;");
+   impl(shorten,s(new VarInsnNode(ALOAD,0),new InsnNode(ARETURN)));
    MethodNode clinit=method(c,"<clinit>",null);
    int found=0;for(AbstractInsnNode n:clinit.instructions.toArray())if(n instanceof LdcInsnNode){
        LdcInsnNode x=(LdcInsnNode)n;
        if("textures/gui/container/crafting_table.png".equals(x.cst)){
-           x.cst="atm0arcanelibrary:textures/gui/sotnah_library.png";found++;
+           x.cst="atm0arcanelibrary:textures/gui/library_wide.png";found++;
        }
    }
    if(found!=1)throw new IllegalStateException("Missing GUI texture ref");
@@ -170,6 +193,13 @@ public class PatchJar implements Opcodes {
        new VarInsnNode(ALOAD,0),new MethodInsnNode(INVOKESPECIAL,"net/minecraft/client/gui/inventory/GuiContainer","func_146274_d","()V",false),
        new InsnNode(RETURN)));
    c.methods.add(wheel);
+   // Draw hover statistics AFTER vanilla slots/items to avoid clipping or z-order issues.
+   MethodNode screen=new MethodNode(ACC_PUBLIC,"func_73863_a","(IIF)V",null,null);
+   screen.instructions.add(s(new VarInsnNode(ALOAD,0),new VarInsnNode(ILOAD,1),new VarInsnNode(ILOAD,2),new VarInsnNode(FLOAD,3),
+       new MethodInsnNode(INVOKESPECIAL,"net/minecraft/client/gui/inventory/GuiContainer","func_73863_a","(IIF)V",false),
+       new VarInsnNode(ALOAD,0),new VarInsnNode(ILOAD,1),new VarInsnNode(ILOAD,2),
+       new MethodInsnNode(INVOKESTATIC,h,"tooltip","(Ljava/lang/Object;II)V",false),new InsnNode(RETURN)));
+   c.methods.add(screen);
  }
 
  /** 1.7.10 Forge drop/placement overrides for *both* library blocks. */
@@ -228,8 +258,8 @@ public class PatchJar implements Opcodes {
    else if(name.endsWith("client/GuiEnchantmentLibrary.class"))gui(c,false);
    else if(name.endsWith("client/GuiPotionLibrary.class"))gui(c,true);
    else if(name.endsWith("ATM0ArcaneLibrary.class")){
-       for(FieldNode f:c.fields)if(f.name.equals("VERSION"))f.value="0.2.2";
-       if(c.visibleAnnotations!=null)for(AnnotationNode a:c.visibleAnnotations)if(a.values!=null)for(int i=0;i+1<a.values.size();i+=2)if("version".equals(a.values.get(i)))a.values.set(i+1,"0.2.2");
+       for(FieldNode f:c.fields)if(f.name.equals("VERSION"))f.value="0.2.3";
+       if(c.visibleAnnotations!=null)for(AnnotationNode a:c.visibleAnnotations)if(a.values!=null)for(int i=0;i+1<a.values.size();i+=2)if("version".equals(a.values.get(i)))a.values.set(i+1,"0.2.3");
    }
    // IMPORTANT: changing BIPUSH operand 84 to 148 or 26 to 143 must also
    // widen the instruction. Otherwise 148 becomes -108, 143 becomes -113:
@@ -253,7 +283,7 @@ public class PatchJar implements Opcodes {
     if(name.endsWith(".class")&&(name.endsWith("TilePotionLibrary.class")||name.endsWith("TileLibraryBase.class")||name.endsWith("BlockPotionLibrary.class")||name.endsWith("BlockEnchantmentLibrary.class")||name.endsWith("ContainerPotionLibrary.class")||name.endsWith("ContainerEnchantmentLibrary.class")||name.endsWith("GuiPotionLibrary.class")||name.endsWith("GuiEnchantmentLibrary.class")||name.endsWith("ATM0ArcaneLibrary.class")||name.endsWith("SlotReadOnly.class"))){
       bytes=transform(bytes,name);System.out.println("patched "+name);touched++;
     }
-    if(name.equals("mcmod.info")){String x=new String(bytes,"UTF-8");x=x.replace("0.1.2-exp3-listui","0.2.2");bytes=x.getBytes("UTF-8");}
+    if(name.equals("mcmod.info")){String x=new String(bytes,"UTF-8");x=x.replace("0.1.2-exp3-listui","0.2.3");bytes=x.getBytes("UTF-8");}
     out.putNextEntry(new ZipEntry(name));out.write(bytes);out.closeEntry();
    }
    if(touched!=10)throw new IOException("Patched "+touched+" of 10 classes");

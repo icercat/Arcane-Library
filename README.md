@@ -1,6 +1,14 @@
-# ATM0 Arcane Library v0.2.2 — Sotnah GUI / 39 Slots / Direct Output
+# ATM0 Arcane Library v0.2.3
 
-**Status: test candidate. GitHub Actions must compile successfully before a 0.2.2 JAR can be published.**
+**Changes:** Both machines use a **252×230** GUI with **189px-wide list rows**, preserving Sotnah’s artwork and player inventory layout. No fixed 14-character ellipsis. A hover tooltip shows the full enchantment/potion name, **maximum recorded enchantment level and stored points**, or **potion Essence stock / level / Charges**. See [0.2.3 changelog](docs/CHANGELOG_0.2.3.md).
+
+**Downloads:** [JAR](dist/ATM0-Arcane-Library-0.2.3.jar) · [source archive](dist/ATM0-Arcane-Library-0.2.3-source.zip)
+
+**Status:** patch-based source, bytecode/mock tests completed; real modpack runtime still to be verified.
+
+# ATM0 Arcane Library v0.2.3 — Sotnah GUI / 39 Slots / Direct Output
+
+**Status: test candidate. GitHub Actions must compile successfully before a 0.2.3 JAR can be published.**
 
 This version uses Sotnah's original library.png (redistribution rights confirmed by the user), porting its 307×256 texture atlas to Forge 1.7.10. Screen size: 176×230.
 
@@ -18,8 +26,8 @@ Minecraft **1.7.10 / Forge**，目前開發版本 **0.2.1**。使用者專案 AT
 
 **版本下載**
 
-- [ATM0-Arcane-Library-0.2.2.jar](dist/ATM0-Arcane-Library-0.2.2.jar)
-- [ATM0-Arcane-Library-0.2.2-source.zip](dist/ATM0-Arcane-Library-0.2.2-source.zip)
+- [ATM0-Arcane-Library-0.2.3.jar](dist/ATM0-Arcane-Library-0.2.3.jar)
+- [ATM0-Arcane-Library-0.2.3-source.zip](dist/ATM0-Arcane-Library-0.2.3-source.zip)
 - [v0.2.1 更新說明](docs/CHANGELOG_0.2.1.md)
 
 > 本版本仍是測試候選版（非已實機驗證的正式穩定版）。請先備份 Minecraft 世界，移除舊版 Arcane Library JAR，勿在 `mods` 中同時安裝兩版。
@@ -75,7 +83,7 @@ Windows：
 powershell -ExecutionPolicy Bypass -File scripts/build.ps1
 ```
 
-編譯後位置 `build/ATM0-Arcane-Library-0.2.2.jar`。
+編譯後位置 `build/ATM0-Arcane-Library-0.2.3.jar`。
 
 **測試範圍：** JAR 位元碼結構檢驗和模擬 Minecraft API 的 NBT／掉落流程已通過。**尚未驗證**完整 Forge 1.7.10 啟動、多人連線、Modpack 中其他模組的自訂破壞流程和 Mouse Tweaks 真實手感；完成前請勿將資料唯一副本放入機器。
 

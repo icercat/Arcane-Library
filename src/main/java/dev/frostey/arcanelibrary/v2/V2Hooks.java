@@ -136,6 +136,7 @@ public final class V2Hooks {
         count(input,count(input)-1);if(count(input)<=0)setField(tile,"input",null);
     }
     public static int potionCount(Object tile){return state(tile).essence.size();}
+    public static long potionStock(Object tile,int index){int key=keyAt(tile,index);Long n=state(tile).essence.get(key);return n==null?0:n;}
     private static int keyAt(Object tile,int index){
         PotionState p=state(tile); if(index<0||index>=p.essence.size())return -1;
         Iterator<Integer> it=p.essence.keySet().iterator();for(int i=0;i<index;i++)it.next();return it.next();

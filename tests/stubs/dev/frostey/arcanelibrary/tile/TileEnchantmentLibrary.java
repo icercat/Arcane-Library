@@ -1,5 +1,9 @@
 package dev.frostey.arcanelibrary.tile;
 public class TileEnchantmentLibrary{
+ public int entryCount(){return records.size();}
+ public int enchantmentIdAt(int idx){return new java.util.ArrayList<>(records.keySet()).get(idx);}
+ public int maxLevel(int id){return records.get(id).maxLevel;}
+ public long points(int id){return records.get(id).points;}
  public int changes;
  public java.util.Map<Integer,Record> records=new java.util.TreeMap<Integer,Record>();
  protected void writeStorage(net.minecraft.nbt.NBTTagCompound tag){
