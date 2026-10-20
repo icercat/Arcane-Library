@@ -326,10 +326,7 @@ public final class V2Hooks {
             if(count<=0)return false;
             setField(container,"selectedIndex",Math.min(id-100,count-1));
         }else if(id>=10&&id<=13){togglePotionMode(container,id);}
-        else if(id==4){
-            int idx=((Number)field(container,"selectedIndex")).intValue();
-            potionExtract(tile,player,idx,mode(container));
-        }else{return false;}
+        else if(id==4){return false;}else{return false;}
         int idx=((Number)field(container,"selectedIndex")).intValue();
         Object preview=potionStack(tile,idx,mode(container));
         call(tile,"setPreview",new Class<?>[]{stackClass()},preview);
@@ -409,24 +406,11 @@ public final class V2Hooks {
         call(font,"func_78261_a",new Class<?>[]{String.class,int.class,int.class,int.class},msg,x,y,color);
     }
     public static boolean enchantButton(Object container,Object player,int button) {
-        Object tile=field(container,"tile");
-        if(tile==null)return false;
-        int n=((Number)call(tile,"entryCount",new Class<?>[0])).intValue();
-        int index=((Number)field(container,"selectedIndex")).intValue();
-        int level=((Number)field(container,"selectedLevel")).intValue();
-        if(button>=100&&button<10000){index=button-100;level=1;}
-        else if(button==2)level=Math.max(1,level-1);
-        else if(button==3)level=Math.min(62,level+1);
-        else if(button==5){selected(container);}
-        else if(button==6){BOOKS.remove(container);}
-        else if(button==4){emitMixed(container,player);}
-        else return false;
-        if(n>0){index=Math.max(0,Math.min(n-1,index));int id=((Number)call(tile,"enchantmentIdAt",new Class<?>[]{int.class},index)).intValue();
-            int mx=((Number)call(tile,"maxLevel",new Class<?>[]{int.class},id)).intValue();
-            level=Math.max(1,Math.min(Math.max(1,Math.min(62,mx)),level));
-        }else{index=0;level=1;}
-        setField(container,"selectedIndex",index);setField(container,"selectedLevel",level);
-        call(container,"refreshPreview",new Class<?>[0]);return true;
+        if(button==4)return false; // Legacy Take is disabled.
+        if(button==6){BOOKS.remove(container);return true;}
+        if(button==5)return false; // No Add button; list clicks modify output directly.
+        if(button<100 && button>=0)return false;
+        return menuSelectEnchantment(container,button);
     }
     public static void togglePotionMode(Object container,int button){
         int prev=mode(container),v=prev;
@@ -457,7 +441,7 @@ public final class V2Hooks {
     }
     public static Object quickInsert(Object container,Object tile,Object player,int slotIndex) {
         // Forge containers map 0 = input, 1 = preview; 2... are the player inventory slots.
-        if(slotIndex<2)return null;
+        if(slotIndex<3)return null;
         Object world=field(tile,"field_145850_b");if(world==null||Boolean.TRUE.equals(field(world,"field_72995_K")))return null;
         Object slots=field(container,"field_75151_b");if(!(slots instanceof List)||slotIndex>=((List<?>)slots).size())return null;
         Object slot=((List<?>)slots).get(slotIndex);
@@ -471,4 +455,105 @@ public final class V2Hooks {
         else call(slot,"func_75218_e",new Class<?>[0]);
         return copy;
     }
+
+    /** Sotnah-like row interactions. Never spend points until actual output removal. */
+    private static boolean menuSelectEnchantment(Object container,int encoded){
+        boolean shift=(encoded&0x80000000)!=0,ctrl=(encoded&0x40000000)!=0;
+        int index=(encoded&0x3fffffff)-100;
+        Object tile=field(container,"tile");
+        int size=((Number)call(tile,"entryCount",new Class<?>[0])).intValue();
+        if(index<0||index>=size)return false;
+        int id=((Number)call(tile,"enchantmentIdAt",new Class<?>[]{int.class},index)).intValue();
+        int max=((Number)call(tile,"maxLevel",new Class<?>[]{int.class},id)).intValue();
+        if(max<1)return false;
+        LinkedHashMap<Integer,Integer> q=BOOKS.get(container);
+        if(q==null){q=new LinkedHashMap<Integer,Integer>();BOOKS.put(container,q);}
+        int previous=q.containsKey(id)?q.get(id):0;
+        int next;
+        if(ctrl)next=shift?0:Math.max(0,previous-1);
+        else if(shift) {
+            next=previous;
+            for(int n=previous+1;n<=Math.min(max,62);n++){
+                q.put(id,n);if(menuCanSpend(container))next=n;else break;
+            }
+        }else next=Math.min(Math.min(max,62),previous+1);
+        if(next==0)q.remove(id);else q.put(id,next);
+        if(!menuCanSpend(container)&&next>0){if(previous==0)q.remove(id);else q.put(id,previous);return false;}
+        setField(container,"selectedIndex",index);
+        setField(container,"selectedLevel",Math.max(1,next));
+        call(container,"refreshPreview",new Class<?>[0]);
+        return true;
+    }
+    public static Object mixedMenuPreview(Object container){
+        LinkedHashMap<Integer,Integer> selection=BOOKS.get(container);
+        if(selection==null||selection.isEmpty()||!menuCanSpend(container))return null;
+        Object tile=field(container,"tile"), book=null;
+        int i=0;
+        for(Map.Entry<Integer,Integer> en:selection.entrySet()){
+            if(i++==0){
+                book=call(tile,"makeBook",new Class<?>[]{int.class,int.class},en.getKey(),en.getValue());
+                continue;
+            }
+            Object tag=getTag(book), ls=list(tag,"StoredEnchantments"), row=tagCompound();
+            call(row,"func_74777_a",new Class<?>[]{String.class,short.class},"id",(short)(int)en.getKey());
+            call(row,"func_74777_a",new Class<?>[]{String.class,short.class},"lvl",(short)(int)en.getValue());
+            listAppend(ls,row);tagSet(tag,"StoredEnchantments",ls);
+        }
+        return book;
+    }
+    public static Object potionMenuPreview(Object container){
+        Object tile=field(container,"tile");
+        int idx=((Number)field(container,"selectedIndex")).intValue();
+        return menuCanSpend(container)?potionStack(tile,idx,mode(container)):null;
+    }
+    @SuppressWarnings("unchecked")
+    public static boolean menuCanSpend(Object container){
+        Object tile=field(container,"tile");
+        if(tile==null)return false;
+        boolean potion=tile.getClass().getName().endsWith("TilePotionLibrary");
+        if(potion){
+            PotionState p=state(tile);
+            int index=((Number)field(container,"selectedIndex")).intValue(), key=keyAt(tile,index);
+            if(key<0||!p.essence.containsKey(key)||p.essence.get(key)<1)return false;
+            int[] required=need(mode(container));
+            for(int i=0;i<3;i++)if(p.charges[i]<required[i])return false;
+            return potionStack(tile,index,mode(container))!=null;
+        }
+        LinkedHashMap<Integer,Integer> q=BOOKS.get(container);
+        if(q==null||q.isEmpty()||q.size()>256)return false;
+        Map<Integer,Object> records=(Map<Integer,Object>)field(tile,"records");
+        if(records==null)return false;
+        for(Map.Entry<Integer,Integer> e:q.entrySet()){
+            Object rec=records.get(e.getKey());
+            int level=e.getValue();long cost=cost(level);
+            if(rec==null||cost<1||level>((Number)field(rec,"maxLevel")).intValue()
+                ||((Number)field(rec,"points")).longValue()<cost)return false;
+        }
+        return true;
+    }
+    @SuppressWarnings("unchecked")
+    public static boolean menuSpend(Object container){
+        if(!menuCanSpend(container))return false;
+        Object tile=field(container,"tile");
+        if(tile.getClass().getName().endsWith("TilePotionLibrary")){
+            PotionState p=state(tile);
+            int key=keyAt(tile,((Number)field(container,"selectedIndex")).intValue());
+            long qty=p.essence.get(key);
+            if(qty==1)p.essence.remove(key);else p.essence.put(key,qty-1);
+            int[] req=need(mode(container));
+            for(int i=0;i<3;i++)p.charges[i]-=req[i];
+        }else{
+            LinkedHashMap<Integer,Integer> q=BOOKS.get(container);
+            Map<Integer,Object> records=(Map<Integer,Object>)field(tile,"records");
+            for(Map.Entry<Integer,Integer> e:q.entrySet()){
+                Object rec=records.get(e.getKey());
+                long remain=((Number)field(rec,"points")).longValue()-cost(e.getValue());
+                setField(rec,"points",remain);
+            }
+            BOOKS.remove(container);
+        }
+        change(tile);
+        return true;
+    }
+
 }

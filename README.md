@@ -1,11 +1,25 @@
-# ATM0 Arcane Library
+# ATM0 Arcane Library v0.2.2 — Sotnah GUI / 39 Slots / Direct Output
+
+**Status: test candidate. GitHub Actions must compile successfully before a 0.2.2 JAR can be published.**
+
+This version uses Sotnah's original library.png (redistribution rights confirmed by the user), porting its 307×256 texture atlas to Forge 1.7.10. Screen size: 176×230.
+
+- Input slot 0 (143,64), output slot 1 (143,92), filter slot 2 (143,37).
+- Main inventory 3–29 (27 real slots), Hotbar 30–38 (9 slots), Y148/166/184/206.
+- Enchantment list: 5 visible rows, wheel scrolling, searchable labels, left click for levels, Shift for maximum, Ctrl for downgrade.
+- Direct take from the output slot; the book or potion is a per-menu preview, not a free TileEntity item. No Add or Take button.
+- Potion variant controls: Normal / Strong / Long / Splash. No separate empty bottle required.
+- Reuses 0.2.1 NBT-preserving break and place behavior.
+
+**Known limitations:** Integration and Mouse Tweaks testing in Minecraft 1.7.10 / ATM0-NH is still required. Back up worlds. This remains patch-based source, not fully restored ForgeGradle source.
+
 
 Minecraft **1.7.10 / Forge**，目前開發版本 **0.2.1**。使用者專案 ATM0-NH。
 
 **版本下載**
 
-- [ATM0-Arcane-Library-0.2.1.jar](dist/ATM0-Arcane-Library-0.2.1.jar)
-- [ATM0-Arcane-Library-0.2.1-source.zip](dist/ATM0-Arcane-Library-0.2.1-source.zip)
+- [ATM0-Arcane-Library-0.2.2.jar](dist/ATM0-Arcane-Library-0.2.2.jar)
+- [ATM0-Arcane-Library-0.2.2-source.zip](dist/ATM0-Arcane-Library-0.2.2-source.zip)
 - [v0.2.1 更新說明](docs/CHANGELOG_0.2.1.md)
 
 > 本版本仍是測試候選版（非已實機驗證的正式穩定版）。請先備份 Minecraft 世界，移除舊版 Arcane Library JAR，勿在 `mods` 中同時安裝兩版。
@@ -61,7 +75,7 @@ Windows：
 powershell -ExecutionPolicy Bypass -File scripts/build.ps1
 ```
 
-編譯後位置 `build/ATM0-Arcane-Library-0.2.1.jar`。
+編譯後位置 `build/ATM0-Arcane-Library-0.2.2.jar`。
 
 **測試範圍：** JAR 位元碼結構檢驗和模擬 Minecraft API 的 NBT／掉落流程已通過。**尚未驗證**完整 Forge 1.7.10 啟動、多人連線、Modpack 中其他模組的自訂破壞流程和 Mouse Tweaks 真實手感；完成前請勿將資料唯一副本放入機器。
 

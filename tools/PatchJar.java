@@ -49,57 +49,127 @@ public class PatchJar implements Opcodes {
  }
  static void containers(ClassNode c,boolean potion){
    MethodNode ctor=method(c,"<init>",null);
-   // Match specific literals in each Slot constructor only.
-   int index=0;
+   int existing=0;
    for(AbstractInsnNode n:ctor.instructions.toArray())if(n instanceof MethodInsnNode){
        MethodInsnNode mi=(MethodInsnNode)n;
-       if(mi.getOpcode()==INVOKESPECIAL && mi.name.equals("<init>") && (mi.owner.equals("net/minecraft/inventory/Slot")||mi.owner.endsWith("/SlotReadOnly"))){
-           int[] coords=index==0?new int[]{143,64}:new int[]{143,92};
+       if(mi.getOpcode()==INVOKESPECIAL&&mi.name.equals("<init>")
+            &&(mi.owner.equals("net/minecraft/inventory/Slot")||mi.owner.endsWith("/SlotReadOnly"))){
+           int[] coords=existing==0?new int[]{143,64}:new int[]{143,92};
            AbstractInsnNode y=n.getPrevious(),x=y.getPrevious();
-           if(x instanceof IntInsnNode)((IntInsnNode)x).operand=coords[0]; else throw new IllegalStateException("slot x "+x);
-           if(y instanceof IntInsnNode)((IntInsnNode)y).operand=coords[1]; else throw new IllegalStateException("slot y "+y);
-           index++;
+           if(!(x instanceof IntInsnNode)||!(y instanceof IntInsnNode))throw new IllegalStateException("Slot constructor coordinates");
+           ((IntInsnNode)x).operand=coords[0];((IntInsnNode)y).operand=coords[1];existing++;
        }
    }
-   if(index!=2)throw new IllegalStateException("only "+index+" slot changes");
-   MethodNode inv=method(c,"addPlayerInventory",null);
-   int repl=0;for(AbstractInsnNode n:inv.instructions.toArray())if(n instanceof IntInsnNode){IntInsnNode v=(IntInsnNode)n;
-     if(v.operand==84){v.operand=148;repl++;}else if(v.operand==142){v.operand=206;repl++;}}
-   if(repl!=2)throw new IllegalStateException("player inventory positions "+repl);
-   String name="func_82846_b",desc="("+PLAYER+"I)"+STACK;
-   proxy(c,name,desc,"quickInsert","(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;I)Ljava/lang/Object;",new int[]{(ALOAD<<16)|0},ARETURN,null); // reset below, include tile
-   MethodNode transfer=method(c,name,desc);
-   transfer.instructions.clear();transfer.instructions.add(s(
-     new VarInsnNode(ALOAD,0),new VarInsnNode(ALOAD,0),
-     new FieldInsnNode(GETFIELD,c.name,"tile","Ldev/frostey/arcanelibrary/tile/Tile"+(potion?"Potion":"Enchantment")+"Library;"),
-     new VarInsnNode(ALOAD,1),new VarInsnNode(ILOAD,2),hook("quickInsert","(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;I)Ljava/lang/Object;"),
-     new TypeInsnNode(CHECKCAST,"net/minecraft/item/ItemStack"),new InsnNode(ARETURN)));
-   MethodNode click=method(c,"func_75140_a",null);
-   if(potion){
-       impl(click,s(new VarInsnNode(ALOAD,0),new VarInsnNode(ALOAD,1),new VarInsnNode(ILOAD,2),hook("potionButton","(Ljava/lang/Object;Ljava/lang/Object;I)Z"),new InsnNode(IRETURN)));
-   }else{
-       impl(click,s(new VarInsnNode(ALOAD,0),new VarInsnNode(ALOAD,1),new VarInsnNode(ILOAD,2),hook("enchantButton","(Ljava/lang/Object;Ljava/lang/Object;I)Z"),new InsnNode(IRETURN)));
+   if(existing!=2)throw new IllegalStateException("Expected exactly 2 old library slots, got "+existing);
+   // Add real filter inventory BEFORE the 36-player slot initializer.
+   boolean added=false;
+   for(AbstractInsnNode n:ctor.instructions.toArray())if(n instanceof MethodInsnNode){
+       MethodInsnNode m=(MethodInsnNode)n;
+       if(m.name.equals("addPlayerInventory")){
+           InsnList f=s(
+               new VarInsnNode(ALOAD,0),new TypeInsnNode(NEW,"net/minecraft/inventory/Slot"),
+               new InsnNode(DUP),new TypeInsnNode(NEW,"net/minecraft/inventory/InventoryBasic"),
+               new InsnNode(DUP),new LdcInsnNode("Filter"),new InsnNode(ICONST_0),new InsnNode(ICONST_1),
+               new MethodInsnNode(INVOKESPECIAL,"net/minecraft/inventory/InventoryBasic","<init>","(Ljava/lang/String;ZI)V",false),
+               new InsnNode(ICONST_0),new IntInsnNode(SIPUSH,143),new IntInsnNode(BIPUSH,37),
+               new MethodInsnNode(INVOKESPECIAL,"net/minecraft/inventory/Slot","<init>","(Lnet/minecraft/inventory/IInventory;III)V",false),
+               new MethodInsnNode(INVOKEVIRTUAL,c.name,"func_75146_a","(Lnet/minecraft/inventory/Slot;)Lnet/minecraft/inventory/Slot;",false),
+               new InsnNode(POP));
+           ctor.instructions.insertBefore(n,f);added=true;break;
+       }
    }
+   if(!added)throw new IllegalStateException("Missing player inventory initializer");
+   for(AbstractInsnNode n:ctor.instructions.toArray())if(n.getOpcode()==RETURN){
+       ctor.instructions.insertBefore(n,s(new VarInsnNode(ALOAD,0),
+           new MethodInsnNode(INVOKESTATIC,"dev/frostey/arcanelibrary/v2/V22OutputHooks","bind","(Ljava/lang/Object;)V",false)));
+   }
+   MethodNode inv=method(c,"addPlayerInventory",null);
+   int repl=0;for(AbstractInsnNode n:inv.instructions.toArray())if(n instanceof IntInsnNode){
+       IntInsnNode i=(IntInsnNode)n;
+       if(i.operand==84){i.operand=148;repl++;}
+       else if(i.operand==142){i.operand=206;repl++;}
+   }
+   if(repl!=2)throw new IllegalStateException("Expected 27 inventory + 9 hotbar position changes");
+   MethodNode transfer=method(c,"func_82846_b","("+PLAYER+"I)"+STACK);
+   impl(transfer,s(new VarInsnNode(ALOAD,0),new VarInsnNode(ALOAD,1),new VarInsnNode(ILOAD,2),
+       new MethodInsnNode(INVOKESTATIC,"dev/frostey/arcanelibrary/v2/V22OutputHooks","quickMove","(Ljava/lang/Object;Ljava/lang/Object;I)Ljava/lang/Object;",false),
+       new TypeInsnNode(CHECKCAST,"net/minecraft/item/ItemStack"),new InsnNode(ARETURN)));
+   MethodNode click=method(c,"func_75140_a",null);
+   impl(click,s(new VarInsnNode(ALOAD,0),new VarInsnNode(ALOAD,1),new VarInsnNode(ILOAD,2),
+       hook(potion?"potionButton":"enchantButton","(Ljava/lang/Object;Ljava/lang/Object;I)Z"),
+       new InsnNode(IRETURN)));
+   String clickDesc="(IIILnet/minecraft/entity/player/EntityPlayer;)Lnet/minecraft/item/ItemStack;";
+   MethodNode parentClick=new MethodNode(ACC_PUBLIC,"ATM0superClick",clickDesc,null,null);
+   parentClick.instructions.add(s(new VarInsnNode(ALOAD,0),new VarInsnNode(ILOAD,1),new VarInsnNode(ILOAD,2),
+       new VarInsnNode(ILOAD,3),new VarInsnNode(ALOAD,4),
+       new MethodInsnNode(INVOKESPECIAL,"net/minecraft/inventory/Container","func_75144_a",clickDesc,false),new InsnNode(ARETURN)));
+   c.methods.add(parentClick);
+   MethodNode intercept=new MethodNode(ACC_PUBLIC,"func_75144_a",clickDesc,null,null);
+   intercept.instructions.add(s(new VarInsnNode(ALOAD,0),new VarInsnNode(ILOAD,1),new VarInsnNode(ILOAD,2),
+       new VarInsnNode(ILOAD,3),new VarInsnNode(ALOAD,4),
+       new MethodInsnNode(INVOKESTATIC,"dev/frostey/arcanelibrary/v2/V22OutputHooks","slotClick",
+           "(Ljava/lang/Object;IIILjava/lang/Object;)Ljava/lang/Object;",false),
+       new TypeInsnNode(CHECKCAST,"net/minecraft/item/ItemStack"),new InsnNode(ARETURN)));
+   c.methods.add(intercept);
+   String closeDesc="(Lnet/minecraft/entity/player/EntityPlayer;)V";
+   MethodNode close=new MethodNode(ACC_PUBLIC,"func_75134_a",closeDesc,null,null);
+   close.instructions.add(s(new VarInsnNode(ALOAD,0),new VarInsnNode(ALOAD,1),
+       new MethodInsnNode(INVOKESPECIAL,"net/minecraft/inventory/Container","func_75134_a",closeDesc,false),
+       new VarInsnNode(ALOAD,0),new VarInsnNode(ALOAD,1),
+       new MethodInsnNode(INVOKESTATIC,"dev/frostey/arcanelibrary/v2/V22OutputHooks","onClose","(Ljava/lang/Object;Ljava/lang/Object;)V",false),
+       new InsnNode(RETURN)));
+   c.methods.add(close);
  }
  static void gui(ClassNode c,boolean potion){
    MethodNode ctor=method(c,"<init>",null);
-   int h=0;for(AbstractInsnNode n:ctor.instructions.toArray())if(n instanceof IntInsnNode&&((IntInsnNode)n).operand==166){((IntInsnNode)n).operand=230;h++;}
-   if(h!=1)throw new IllegalStateException("gui height "+h);
-   // draw background from mod asset, rather than vanilla crafting table.
+   int updated=0;for(AbstractInsnNode n:ctor.instructions.toArray())if(n instanceof IntInsnNode&&((IntInsnNode)n).operand==166){
+       ((IntInsnNode)n).operand=230;updated++;
+   }
+   if(updated!=1)throw new IllegalStateException("Expected old GUI height once");
    MethodNode clinit=method(c,"<clinit>",null);
-   int bg=0;for(AbstractInsnNode n:clinit.instructions.toArray())if(n instanceof LdcInsnNode){LdcInsnNode x=(LdcInsnNode)n;if("textures/gui/container/crafting_table.png".equals(x.cst)){x.cst="atm0arcanelibrary:textures/gui/library_v2.png";bg++;}}
-   if(bg!=1)throw new IllegalStateException("background path changes "+bg);
-   String container="Ldev/frostey/arcanelibrary/container/Container"+(potion?"Potion":"Enchantment")+"Library;";
-   proxy(c,"rebuildButtons","()V","buildGui","(Ljava/lang/Object;Z)V",new int[]{(ALOAD<<16)|0},RETURN,null);
-   MethodNode rb=method(c,"rebuildButtons","()V");rb.instructions.clear();rb.instructions.add(s(new VarInsnNode(ALOAD,0),new InsnNode(potion?ICONST_1:ICONST_0),hook("buildGui","(Ljava/lang/Object;Z)V"),new InsnNode(RETURN)));
+   int found=0;for(AbstractInsnNode n:clinit.instructions.toArray())if(n instanceof LdcInsnNode){
+       LdcInsnNode x=(LdcInsnNode)n;
+       if("textures/gui/container/crafting_table.png".equals(x.cst)){
+           x.cst="atm0arcanelibrary:textures/gui/sotnah_library.png";found++;
+       }
+   }
+   if(found!=1)throw new IllegalStateException("Missing GUI texture ref");
+   final String h="dev/frostey/arcanelibrary/v2/V22GuiHooks";
+   MethodNode rb=method(c,"rebuildButtons","()V");
+   impl(rb,s(new VarInsnNode(ALOAD,0),new InsnNode(potion?ICONST_1:ICONST_0),
+       new MethodInsnNode(INVOKESTATIC,h,"build","(Ljava/lang/Object;Z)V",false),new InsnNode(RETURN)));
+   MethodNode foreground=method(c,"func_146979_b","(II)V");
+   impl(foreground,s(new VarInsnNode(ALOAD,0),new VarInsnNode(ILOAD,1),new VarInsnNode(ILOAD,2),
+       new MethodInsnNode(INVOKESTATIC,h,"foreground","(Ljava/lang/Object;II)V",false),new InsnNode(RETURN)));
+   MethodNode background=method(c,"func_146976_a","(FII)V");
+   impl(background,s(new VarInsnNode(ALOAD,0),new VarInsnNode(FLOAD,1),new VarInsnNode(ILOAD,2),
+       new VarInsnNode(ILOAD,3),new MethodInsnNode(INVOKESTATIC,h,"render","(Ljava/lang/Object;FII)V",false),new InsnNode(RETURN)));
    MethodNode act=method(c,"func_146284_a",null);
-   impl(act,s(new VarInsnNode(ALOAD,0),new VarInsnNode(ALOAD,1),new InsnNode(potion?ICONST_1:ICONST_0),hook("guiClick","(Ljava/lang/Object;Ljava/lang/Object;Z)V"),new InsnNode(RETURN)));
-   MethodNode fore=method(c,"func_146979_b",null);
-   impl(fore,s(new VarInsnNode(ALOAD,0),new InsnNode(potion?ICONST_1:ICONST_0),hook("drawGui","(Ljava/lang/Object;Z)V"),new InsnNode(RETURN)));
-   // For dynamically changing enchant lists, rebuild controls when counts change.
-   MethodNode tick=new MethodNode(ACC_PUBLIC,"func_73876_c","()V",null,null);
-   tick.instructions.add(s(new VarInsnNode(ALOAD,0),new MethodInsnNode(INVOKESPECIAL,"net/minecraft/client/gui/inventory/GuiContainer","func_73876_c","()V",false),new VarInsnNode(ALOAD,0),hook("refreshGui","(Ljava/lang/Object;)V"),new InsnNode(RETURN)));
-   c.methods.add(tick);
+   impl(act,s(new VarInsnNode(ALOAD,0),new VarInsnNode(ALOAD,1),new InsnNode(potion?ICONST_1:ICONST_0),
+       hook("guiClick","(Ljava/lang/Object;Ljava/lang/Object;Z)V"),new InsnNode(RETURN)));
+   String mouse="(III)V",key="(CI)V";
+   MethodNode superMouse=new MethodNode(ACC_PUBLIC,"ATM0superMouse",mouse,null,null);
+   superMouse.instructions.add(s(new VarInsnNode(ALOAD,0),new VarInsnNode(ILOAD,1),new VarInsnNode(ILOAD,2),new VarInsnNode(ILOAD,3),
+       new MethodInsnNode(INVOKESPECIAL,"net/minecraft/client/gui/inventory/GuiContainer","func_73864_a",mouse,false),new InsnNode(RETURN)));
+   c.methods.add(superMouse);
+   MethodNode clicked=new MethodNode(ACC_PROTECTED,"func_73864_a",mouse,null,null);
+   clicked.instructions.add(s(new VarInsnNode(ALOAD,0),new VarInsnNode(ILOAD,1),new VarInsnNode(ILOAD,2),new VarInsnNode(ILOAD,3),
+       new MethodInsnNode(INVOKESTATIC,h,"click","(Ljava/lang/Object;III)V",false),new InsnNode(RETURN)));
+   c.methods.add(clicked);
+   MethodNode superKey=new MethodNode(ACC_PUBLIC,"ATM0superKey",key,null,null);
+   superKey.instructions.add(s(new VarInsnNode(ALOAD,0),new VarInsnNode(ILOAD,1),new VarInsnNode(ILOAD,2),
+       new MethodInsnNode(INVOKESPECIAL,"net/minecraft/client/gui/inventory/GuiContainer","func_73869_a",key,false),new InsnNode(RETURN)));
+   c.methods.add(superKey);
+   MethodNode typed=new MethodNode(ACC_PROTECTED,"func_73869_a",key,null,null);
+   typed.instructions.add(s(new VarInsnNode(ALOAD,0),new VarInsnNode(ILOAD,1),new VarInsnNode(ILOAD,2),
+       new MethodInsnNode(INVOKESTATIC,h,"key","(Ljava/lang/Object;CI)V",false),new InsnNode(RETURN)));
+   c.methods.add(typed);
+   MethodNode wheel=new MethodNode(ACC_PUBLIC,"func_146274_d","()V",null,null);
+   wheel.instructions.add(s(new VarInsnNode(ALOAD,0),
+       new MethodInsnNode(INVOKESTATIC,h,"wheel","(Ljava/lang/Object;)V",false),
+       new VarInsnNode(ALOAD,0),new MethodInsnNode(INVOKESPECIAL,"net/minecraft/client/gui/inventory/GuiContainer","func_146274_d","()V",false),
+       new InsnNode(RETURN)));
+   c.methods.add(wheel);
  }
 
  /** 1.7.10 Forge drop/placement overrides for *both* library blocks. */
@@ -126,8 +196,31 @@ public class PatchJar implements Opcodes {
    silk.instructions.add(s(new InsnNode(ICONST_0),new InsnNode(IRETURN)));
    c.methods.add(silk);
  }
+
+ static void patchSlotOutput(ClassNode c){
+    final String h="dev/frostey/arcanelibrary/v2/V22OutputHooks";
+    MethodNode take=method(c,"func_82869_a","(Lnet/minecraft/entity/player/EntityPlayer;)Z");
+    impl(take,s(new VarInsnNode(ALOAD,0),new VarInsnNode(ALOAD,1),
+        new MethodInsnNode(INVOKESTATIC,h,"canTake","(Ljava/lang/Object;Ljava/lang/Object;)Z",false),new InsnNode(IRETURN)));
+    MethodNode get=new MethodNode(ACC_PUBLIC,"func_75211_c","()Lnet/minecraft/item/ItemStack;",null,null);
+    get.instructions.add(s(new VarInsnNode(ALOAD,0),
+        new MethodInsnNode(INVOKESTATIC,h,"preview","(Ljava/lang/Object;)Ljava/lang/Object;",false),
+        new TypeInsnNode(CHECKCAST,"net/minecraft/item/ItemStack"),new InsnNode(ARETURN)));c.methods.add(get);
+    MethodNode decr=new MethodNode(ACC_PUBLIC,"func_75209_a","(I)Lnet/minecraft/item/ItemStack;",null,null);
+    decr.instructions.add(s(new VarInsnNode(ALOAD,0),new VarInsnNode(ILOAD,1),
+        new MethodInsnNode(INVOKESTATIC,h,"takePart","(Ljava/lang/Object;I)Ljava/lang/Object;",false),
+        new TypeInsnNode(CHECKCAST,"net/minecraft/item/ItemStack"),new InsnNode(ARETURN)));c.methods.add(decr);
+    MethodNode put=new MethodNode(ACC_PUBLIC,"func_75215_d","(Lnet/minecraft/item/ItemStack;)V",null,null);
+    put.instructions.add(s(new VarInsnNode(ALOAD,0),new VarInsnNode(ALOAD,1),
+        new MethodInsnNode(INVOKESTATIC,h,"ignoreSet","(Ljava/lang/Object;Ljava/lang/Object;)V",false),new InsnNode(RETURN)));c.methods.add(put);
+    MethodNode pickup=new MethodNode(ACC_PUBLIC,"func_82870_a","(Lnet/minecraft/entity/player/EntityPlayer;Lnet/minecraft/item/ItemStack;)V",null,null);
+    pickup.instructions.add(s(new VarInsnNode(ALOAD,0),new VarInsnNode(ALOAD,1),new VarInsnNode(ALOAD,2),
+        new MethodInsnNode(INVOKESTATIC,h,"onPickup","(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)V",false),
+        new InsnNode(RETURN)));c.methods.add(pickup);
+ }
  static byte[] transform(byte[] input,String name){ClassReader cr=new ClassReader(input);ClassNode c=new ClassNode();cr.accept(c,0);
-   if(name.endsWith("block/BlockPotionLibrary.class")||name.endsWith("block/BlockEnchantmentLibrary.class"))block(c);
+   if(name.endsWith("container/SlotReadOnly.class"))patchSlotOutput(c);
+   else if(name.endsWith("block/BlockPotionLibrary.class")||name.endsWith("block/BlockEnchantmentLibrary.class"))block(c);
    else if(name.endsWith("tile/TilePotionLibrary.class"))tilePotion(c);
    else if(name.endsWith("tile/TileLibraryBase.class"))tileBase(c);
    else if(name.endsWith("container/ContainerPotionLibrary.class"))containers(c,true);
@@ -135,8 +228,8 @@ public class PatchJar implements Opcodes {
    else if(name.endsWith("client/GuiEnchantmentLibrary.class"))gui(c,false);
    else if(name.endsWith("client/GuiPotionLibrary.class"))gui(c,true);
    else if(name.endsWith("ATM0ArcaneLibrary.class")){
-       for(FieldNode f:c.fields)if(f.name.equals("VERSION"))f.value="0.2.1";
-       if(c.visibleAnnotations!=null)for(AnnotationNode a:c.visibleAnnotations)if(a.values!=null)for(int i=0;i+1<a.values.size();i+=2)if("version".equals(a.values.get(i)))a.values.set(i+1,"0.2.1");
+       for(FieldNode f:c.fields)if(f.name.equals("VERSION"))f.value="0.2.2";
+       if(c.visibleAnnotations!=null)for(AnnotationNode a:c.visibleAnnotations)if(a.values!=null)for(int i=0;i+1<a.values.size();i+=2)if("version".equals(a.values.get(i)))a.values.set(i+1,"0.2.2");
    }
    ClassWriter cw=new ClassWriter(ClassWriter.COMPUTE_MAXS);c.accept(cw);return cw.toByteArray();
  }
@@ -146,13 +239,13 @@ public class PatchJar implements Opcodes {
    while(it.hasMoreElements()){
     ZipEntry e=it.nextElement();String name=e.getName();
     byte[] bytes;try(InputStream is=zip.getInputStream(e)){bytes=is.readAllBytes();}
-    if(name.endsWith(".class")&&(name.endsWith("TilePotionLibrary.class")||name.endsWith("TileLibraryBase.class")||name.endsWith("BlockPotionLibrary.class")||name.endsWith("BlockEnchantmentLibrary.class")||name.endsWith("ContainerPotionLibrary.class")||name.endsWith("ContainerEnchantmentLibrary.class")||name.endsWith("GuiPotionLibrary.class")||name.endsWith("GuiEnchantmentLibrary.class")||name.endsWith("ATM0ArcaneLibrary.class"))){
+    if(name.endsWith(".class")&&(name.endsWith("TilePotionLibrary.class")||name.endsWith("TileLibraryBase.class")||name.endsWith("BlockPotionLibrary.class")||name.endsWith("BlockEnchantmentLibrary.class")||name.endsWith("ContainerPotionLibrary.class")||name.endsWith("ContainerEnchantmentLibrary.class")||name.endsWith("GuiPotionLibrary.class")||name.endsWith("GuiEnchantmentLibrary.class")||name.endsWith("ATM0ArcaneLibrary.class")||name.endsWith("SlotReadOnly.class"))){
       bytes=transform(bytes,name);System.out.println("patched "+name);touched++;
     }
-    if(name.equals("mcmod.info")){String x=new String(bytes,"UTF-8");x=x.replace("0.1.2-exp3-listui","0.2.1");bytes=x.getBytes("UTF-8");}
+    if(name.equals("mcmod.info")){String x=new String(bytes,"UTF-8");x=x.replace("0.1.2-exp3-listui","0.2.2");bytes=x.getBytes("UTF-8");}
     out.putNextEntry(new ZipEntry(name));out.write(bytes);out.closeEntry();
    }
-   if(touched!=9)throw new IOException("Patched "+touched+" of 9 classes");
+   if(touched!=10)throw new IOException("Patched "+touched+" of 10 classes");
    Path cls=Paths.get(args[2]);Files.walk(cls).filter(Files::isRegularFile).forEach(p->{try{
       String k=cls.relativize(p).toString().replace(File.separatorChar,'/');if(!k.startsWith("dev/"))return;out.putNextEntry(new ZipEntry(k));out.write(Files.readAllBytes(p));out.closeEntry();
    }catch(IOException e){throw new UncheckedIOException(e);}});
