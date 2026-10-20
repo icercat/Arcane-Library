@@ -8,4 +8,9 @@ javac --release 8 -d "$ROOT/build/hooks" "$ROOT/src/main/java/dev/frostey/arcane
 javac "${JDK_EXPORT[@]}" -d "$ROOT/build/patcher" "$ROOT/tools/PatchJar.java" "$ROOT/tools/VerifyJar.java"
 java "${JDK_EXPORT[@]}" -cp "$ROOT/build/patcher" PatchJar "$ROOT/vendor/ATM0-Arcane-Library-0.1.2-exp3-listui.jar" "$OUT" "$ROOT/build/hooks" "$ROOT/src/main/resources"
 java "${JDK_EXPORT[@]}" -cp "$ROOT/build/patcher" VerifyJar "$OUT"
+# Bytecode regression: slot positions > 127 must be SIPUSH, never overflowing BIPUSH.
+SLOTS="$(javap -c -p -classpath "$OUT" dev.frostey.arcanelibrary.container.ContainerEnchantmentLibrary)"
+grep -Eq 'sipush[[:space:]]+148' <<< "$SLOTS" || { echo "Main inventory Y=148 missing"; exit 1; }
+grep -Eq 'sipush[[:space:]]+143' <<< "$SLOTS" || { echo "Machine X=143 missing"; exit 1; }
+grep -Eq 'sipush[[:space:]]+206' <<< "$SLOTS" || { echo "Hotbar Y=206 missing"; exit 1; }
 printf '\nBuilt %s\n' "$OUT"

@@ -231,6 +231,17 @@ public class PatchJar implements Opcodes {
        for(FieldNode f:c.fields)if(f.name.equals("VERSION"))f.value="0.2.2";
        if(c.visibleAnnotations!=null)for(AnnotationNode a:c.visibleAnnotations)if(a.values!=null)for(int i=0;i+1<a.values.size();i+=2)if("version".equals(a.values.get(i)))a.values.set(i+1,"0.2.2");
    }
+   // IMPORTANT: changing BIPUSH operand 84 to 148 or 26 to 143 must also
+   // widen the instruction. Otherwise 148 becomes -108, 143 becomes -113:
+   // the exact reason only the hotbar was clickable in 0.2.1.
+   for(MethodNode method:c.methods)for(AbstractInsnNode node:method.instructions.toArray()){
+       if(node instanceof IntInsnNode){
+           IntInsnNode integer=(IntInsnNode)node;
+           if(integer.getOpcode()==BIPUSH && (integer.operand>127 || integer.operand<-128)){
+               integer.setOpcode(SIPUSH);
+           }
+       }
+   }
    ClassWriter cw=new ClassWriter(ClassWriter.COMPUTE_MAXS);c.accept(cw);return cw.toByteArray();
  }
  public static void main(String[] args)throws Exception{
