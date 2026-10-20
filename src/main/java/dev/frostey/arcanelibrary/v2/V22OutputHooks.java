@@ -11,6 +11,7 @@ public final class V22OutputHooks {
     private V22OutputHooks(){}
     private static final Map<Object,Object> SLOTS=Collections.synchronizedMap(new WeakHashMap<Object,Object>());
     private static final Map<Object,Object> FILTERS=Collections.synchronizedMap(new WeakHashMap<Object,Object>());
+    private static final Map<Object,Object> CLIENT_PREVIEWS=Collections.synchronizedMap(new WeakHashMap<Object,Object>());
     private static Class<?> cl(String s){try{return Class.forName(s);}catch(Exception e){throw new IllegalStateException(s,e);}}
     private static Object call(Object obj,String m,Class<?>[] t,Object... args){
         try {
@@ -41,13 +42,15 @@ public final class V22OutputHooks {
     public static Object preview(Object slot){
         Object container=owner(slot);
         if(container==null)return null;
+        // Client output is synced by vanilla Container set-slot packets; never fabricate from unsynced menu selections.
+        if(client(container))return CLIENT_PREVIEWS.get(slot);
         boolean potion=container.getClass().getName().endsWith("ContainerPotionLibrary");
         return potion ? V2Hooks.potionMenuPreview(container) : V2Hooks.mixedMenuPreview(container);
     }
     public static boolean canTake(Object slot,Object player){
         Object container=owner(slot);
         return container!=null&&player!=null&&held(player)==null&&preview(slot)!=null
-            &&V2Hooks.menuCanSpend(container);
+            &&(client(container)||V2Hooks.menuCanSpend(container));
     }
     // Virtual output: splitting does not mutate TileEntity inventory.
     public static Object takePart(Object slot,int amount){
@@ -55,7 +58,13 @@ public final class V22OutputHooks {
         if(p==null||amount<1)return null;
         return item(p);
     }
-    public static void ignoreSet(Object slot,Object stack){}
+    public static void ignoreSet(Object slot,Object stack){
+        Object container=owner(slot);
+        if(container!=null && client(container)){
+            if(stack==null)CLIENT_PREVIEWS.remove(slot);
+            else CLIENT_PREVIEWS.put(slot,item(stack));
+        }
+    }
     public static boolean rejectInput(Object slot,Object stack){return false;}
     public static void onPickup(Object slot,Object player,Object stack){
         Object container=owner(slot);
@@ -86,6 +95,8 @@ public final class V22OutputHooks {
     }
     /** Close GUI: return the temporary item-filter stack without copying it. */
     public static void onClose(Object container,Object player){
+        List<?> list=slots(container);
+        if(list!=null&&list.size()>1)CLIENT_PREVIEWS.remove(list.get(1));
         Object f=FILTERS.remove(container);
         if(f==null||player==null)return;
         Object stack=call(f,"func_75211_c",new Class<?>[0]);
