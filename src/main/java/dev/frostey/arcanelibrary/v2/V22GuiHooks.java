@@ -92,7 +92,7 @@ public final class V22GuiHooks {
         bindTexture();
         int x=left(gui),y=top(gui);
         quad(x,y,176,230,0,0);
-        int[] filtered=matches(gui),first=number(gui,"pageStart");
+        int[] filtered=matches(gui);int first=number(gui,"pageStart");
         first=Math.max(0,Math.min(first,Math.max(0,filtered.length-5)));
         setInt(gui,"pageStart",first);
         int sel=number(gui,"localSelected");
